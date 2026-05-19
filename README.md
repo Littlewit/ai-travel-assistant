@@ -1,4 +1,3 @@
-NEW_FILE_CODE
 # 🌍 智能 AI 旅游助手 (Smart AI Travel Assistant)
 
 基于 **LangChain**、**LangGraph**、**FAISS** 向量检索与 **FastAPI** 构建的全链路智能旅游咨询系统。本项目结合阿里云千问大模型（Qwen），通过 RAG（检索增强生成）技术解决大模型幻觉问题，为用户提供精准、个性化且具备多轮记忆的旅游行程规划服务。
