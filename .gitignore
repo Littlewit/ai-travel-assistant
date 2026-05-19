@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+env/
+venv/
+
+# 依赖管理
+uv.lock
+
+# 环境变量与数据库（保护隐私）
+.env
+*.db
+chat_history.db
+
+# 向量库（建议在 Render 构建时重新生成，避免仓库过大）
+vector_store/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store

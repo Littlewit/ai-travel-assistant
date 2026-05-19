@@ -1,0 +1,13 @@
+NEW_FILE_CODE
+services:
+  - type: web
+    name: ai-travel-assistant
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && uv run python -m app.rag_engine
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DASHSCOPE_API_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.0
