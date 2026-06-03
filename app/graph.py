@@ -10,11 +10,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# 定义 Agent 的状态
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     history: str
     context: str
 
+# 定义一个 ChatTongyi 实例
 llm = ChatTongyi(
     model="qwen-plus", 
     dashscope_api_key=os.getenv("DASHSCOPE_API_KEY"), 
@@ -22,6 +24,7 @@ llm = ChatTongyi(
     streaming=True # 开启流式
 )
 
+# 定义路由节点
 def router_node(state: AgentState):
     """根据关键词简单判断意图"""
     last_msg = state["messages"][-1].content.lower()
@@ -30,6 +33,7 @@ def router_node(state: AgentState):
         return "rag_node"
     return "chat_node"
 
+# 定义 RAG 节点
 def rag_node(state: AgentState):
     """RAG 检索增强节点"""
     if retriever:
@@ -61,6 +65,7 @@ def rag_node(state: AgentState):
     response = chain.invoke({"context": context, "question": state["messages"][-1].content})
     return {"messages": [response]}
 
+# 定义闲聊节点
 def chat_node(state: AgentState):
     """纯闲聊节点"""
     response = llm.invoke(state["messages"])
