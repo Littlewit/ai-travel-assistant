@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader, DirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings  # 切换为 OpenAI 兼容接口
+from langchain_community.embeddings import DashScopeEmbeddings  # 切换回原生 SDK
 
 load_dotenv()
 
@@ -32,16 +32,21 @@ def create_vector_store():
     chunks = text_splitter.split_documents(documents)
 
     api_key = os.getenv("DASHSCOPE_API_KEY")
-    base_url = os.getenv("DASHSCOPE_BASE_URL")
     if not api_key:
         raise ValueError("❌ 错误: 未检测到 DASHSCOPE_API_KEY 环境变量")
     
-    # 【核心修改】：使用 OpenAIEmbeddings 兼容阿里云百炼
-    embeddings = OpenAIEmbeddings(
-        model="text-embedding-v2", # 或者尝试 text-embedding-v3
-        api_key=api_key,
-        base_url=base_url
-    )
+    # 【核心修改】：使用原生 DashScopeEmbeddings 调用视觉模型
+    try:
+        embeddings = DashScopeEmbeddings(
+            model="tongyi-embedding-vision-plus-2026-03-06", 
+            dashscope_api_key=api_key
+        )
+        # 预测试连通性
+        embeddings.embed_query("test")
+        print("✅ Embedding 模型连通性测试成功")
+    except Exception as e:
+        print(f"⚠️ Embedding 模型初始化失败: {e}")
+        raise e
     
     vector_store = FAISS.from_documents(chunks, embeddings)
     
@@ -59,10 +64,9 @@ def load_vector_store():
     if not api_key:
         raise ValueError("❌ 错误: 未检测到 DASHSCOPE_API_KEY 环境变量")
 
-    embeddings = OpenAIEmbeddings(
-        model="text-embedding-v2",
-        api_key=api_key,
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+    embeddings = DashScopeEmbeddings(
+        model="tongyi-embedding-vision-plus-2026-03-06",
+        dashscope_api_key=api_key
     )
     return FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
 
