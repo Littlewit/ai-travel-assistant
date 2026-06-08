@@ -55,7 +55,7 @@ retriever = None
 
 class ChatRequest(BaseModel):
     message: str
-    session_id: str = None
+    session_id: str | None = None
 
 @app.get("/")
 async def read_root():
@@ -109,12 +109,13 @@ async def chat_stream(request: ChatRequest):
     is_travel_query = any(k in request.message.lower() for k in keywords)
     
     context = ""
-    if is_travel_query and retriever:
-        try:
-            docs = retriever.invoke(request.message)
-            context = "\n\n".join([doc.page_content for doc in docs])
-        except Exception as e:
-            print(f"检索出错: {e}")
+    # 【临时调试】：暂时强制关闭 RAG 检索，看是否能快速返回
+    # if is_travel_query and retriever:
+    #     try:
+    #         docs = retriever.invoke(request.message)
+    #         context = "\n\n".join([doc.page_content for doc in docs])
+    #     except Exception as e:
+    #         print(f"检索出错: {e}")
 
     if context:
         prompt_template = """你是一个资深的智能旅游规划师。请根据以下【背景知识】和用户的【问题】，提供一份详细的旅行建议。
@@ -140,9 +141,10 @@ async def chat_stream(request: ChatRequest):
     def event_generator():
         full_response = ""
         for chunk in chain.stream(inputs):
-            if chunk.content:
-                full_response += chunk.content
-                yield f"data: {json.dumps({'content': chunk.content})}\n\n"
+            if hasattr(chunk, 'content') and chunk.content:
+                content_str = chunk.content if isinstance(chunk.content, str) else str(chunk.content)
+                full_response += content_str
+                yield f"data: {json.dumps({'content': content_str})}\n\n"
         
         save_message(session_id, "ai", full_response)
         yield f"data: {json.dumps({'session_id': session_id})}\n\n"
