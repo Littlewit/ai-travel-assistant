@@ -1,5 +1,6 @@
-from typing import Annotated, Sequence, TypedDict, Literal
+from typing import Annotated, Sequence, TypedDict, Literal, Optional, List
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
+from langchain_core.documents import Document
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langchain_openai import ChatOpenAI  # 引入 ChatOpenAI
@@ -44,11 +45,15 @@ def rag_node(state: AgentState):
     last_msg_content = state["messages"][-1].content
     question_str = last_msg_content if isinstance(last_msg_content, str) else str(last_msg_content)
     
-    if retriever:
-        docs = retriever.invoke(question_str)
-        context = "\n\n".join([doc.page_content for doc in docs])
-    else:
-        context = "暂无相关背景知识。"
+    context = "暂无相关背景知识。"
+    if retriever is not None:
+        try:
+            docs: List[Document] = retriever.invoke(question_str)
+            if docs:  # 确保docs不是None或空列表
+                context = "\n\n".join([doc.page_content for doc in docs])
+        except Exception as e:
+            print(f"RAG检索出错: {e}")
+            context = "检索背景知识时出现错误。"
     
     prompt_template = """你是一个资深的智能旅游规划师。请根据以下【背景知识】和用户的【问题】，提供一份详细的旅行建议。
 
