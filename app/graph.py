@@ -24,7 +24,7 @@ llm = ChatOpenAI(
     base_url=os.getenv("DASHSCOPE_BASE_URL"),
     temperature=0.7,
     streaming=True,
-    extra_body={"enable_thinking": True}  # 开启深度思考
+    extra_body={"enable_thinking": False}  # 【提速】：关闭深度思考，显著降低 TTFT
 )
 
 def router_node(state: AgentState):
