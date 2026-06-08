@@ -4,7 +4,6 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage
 import os, json, uuid, sqlite3
-from app.graph import travel_agent_graph
 
 # --- 数据库初始化 ---
 DB_NAME = os.path.join(os.getcwd(), "chat_history.db")
@@ -88,23 +87,32 @@ async def favicon():
 
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
+    # 【动态导入】：只有在收到请求时才加载 AI 模块，避免启动超时
+    try:
+        from app.graph import llm, ChatPromptTemplate
+        from app.rag_engine import load_vector_store
+        
+        # 懒加载检索器
+        global retriever
+        if 'retriever' not in globals() or retriever is None:
+            vs = load_vector_store()
+            if vs:
+                retriever = vs.as_retriever(search_kwargs={"k": 3})
+    except Exception as e:
+        return StreamingResponse(iter([f"data: 系统初始化失败: {str(e)}\n\n"]), media_type="text/event-stream")
+
     session_id = request.session_id or str(uuid.uuid4())
     save_message(session_id, "human", request.message)
     
     history = get_history(session_id)
     history_str = "\n".join([f"{h['role']}: {h['content']}" for h in history[-6:]])
     
-    from app.graph import llm, ChatPromptTemplate
-    
-    # 尝试获取检索器，如果还没加载完则返回 None
-    current_retriever = get_retriever()
-    
     keywords = ["旅游", "景点", "美食", "攻略", "酒店", "交通", "玩", "吃", "住", "行", "推荐", "路线"]
     is_travel_query = any(k in request.message.lower() for k in keywords)
     
-    if is_travel_query and current_retriever:
+    if is_travel_query and retriever:
         try:
-            docs = current_retriever.invoke(request.message)
+            docs = retriever.invoke(request.message)
             context = "\n\n".join([doc.page_content for doc in docs])
         except:
             context = ""
@@ -146,7 +154,8 @@ async def chat_stream(request: ChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    # 强制使用 10000 端口（Render 默认期望的端口范围）
+    port = int(os.getenv("PORT", 10000))
+    print(f"🚀 Starting server on port {port}...")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 
-from app.rag_engine import load_vector_store # 仅导入函数
