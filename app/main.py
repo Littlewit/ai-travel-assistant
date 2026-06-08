@@ -119,6 +119,10 @@ async def favicon():
 async def health_check():
     return {"status": "ok", "retriever_loaded": retriever is not None}
 
+@app.get("/test")
+async def test_endpoint():
+    return "Hello from Render! Server is running."
+
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
     session_id = request.session_id or str(uuid.uuid4())
