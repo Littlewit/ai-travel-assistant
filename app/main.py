@@ -47,8 +47,13 @@ app.add_middleware(
 )
 
 static_dir = os.path.join(os.getcwd(), "static")
+print(f"📂 Static directory path: {static_dir}")
+print(f"📂 Static directory exists: {os.path.exists(static_dir)}")
+
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
+else:
+    print("⚠️ Warning: Static directory not found!")
 
 # 全局检索器，初始为 None
 retriever = None
@@ -88,10 +93,19 @@ class ChatRequest(BaseModel):
 @app.get("/")
 async def read_root():
     index_path = os.path.join(static_dir, "index.html")
+    print(f"🔍 Looking for index.html at: {index_path}")
     if os.path.exists(index_path):
-        with open(index_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
-    return HTMLResponse(content="<h1>Static files not found</h1>", status_code=404)
+        try:
+            with open(index_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                print("✅ index.html loaded successfully")
+                return HTMLResponse(content=content)
+        except Exception as e:
+            print(f"❌ Error reading index.html: {e}")
+            return HTMLResponse(content=f"<h1>Error loading page: {str(e)}</h1>", status_code=500)
+    else:
+        print("❌ index.html not found")
+        return HTMLResponse(content="<h1>Static files not found</h1>", status_code=404)
 
 @app.get("/favicon.ico")
 async def favicon():
