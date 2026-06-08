@@ -52,6 +52,34 @@ if os.path.exists(static_dir):
 
 # 全局检索器，初始为 None
 retriever = None
+model_loading_lock = False # 防止并发重复加载
+
+def _background_load_model():
+    """在后台线程中加载模型，不阻塞主进程"""
+    global retriever, model_loading_lock
+    if model_loading_lock or retriever is not None:
+        return
+    
+    model_loading_lock = True
+    try:
+        print("⏳ [后台] 正在加载向量库和 Embedding 模型...")
+        from app.rag_engine import load_vector_store
+        vs = load_vector_store()
+        if vs:
+            retriever = vs.as_retriever(search_kwargs={"k": 3})
+            print("✅ [后台] 向量库加载成功！")
+        else:
+            print("⚠️ [后台] 向量库加载返回 None")
+    except Exception as e:
+        print(f"❌ [后台] 模型加载失败: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        model_loading_lock = False
+
+# 启动时触发后台加载
+import threading
+threading.Thread(target=_background_load_model, daemon=True).start()
 
 class ChatRequest(BaseModel):
     message: str
@@ -73,33 +101,24 @@ async def favicon():
         return FileResponse(favicon_path)
     return HTMLResponse("")
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "retriever_loaded": retriever is not None}
+
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
     session_id = request.session_id or str(uuid.uuid4())
     save_message(session_id, "human", request.message)
     
-    # 【核心修改】：动态导入，避免启动时阻塞
+    # 【核心修改】：直接导入，模型已在后台线程加载
     try:
         from app.graph import llm
         from langchain_core.prompts import ChatPromptTemplate
-        from app.rag_engine import load_vector_store
-        
-        # 懒加载检索器
-        global retriever
-        if retriever is None:
-            print("⏳ 正在尝试加载向量库...")
-            vs = load_vector_store()
-            if vs:
-                retriever = vs.as_retriever(search_kwargs={"k": 3})
-                print("✅ 向量库加载成功")
-            else:
-                print("⚠️ 向量库加载返回 None")
     except Exception as e:
         import traceback
-        error_msg = f"系统初始化失败: {str(e)}"
         print(traceback.format_exc())
         def error_generator():
-            yield f"data: {json.dumps({'content': f'⚠️ AI 助手启动中，请稍后再试。错误详情: {str(e)}'})}\n\n"
+            yield f"data: {json.dumps({'content': f'⚠️ 系统初始化失败: {str(e)}'})}\n\n"
         return StreamingResponse(error_generator(), media_type="text/event-stream")
 
     history = get_history(session_id)
