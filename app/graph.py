@@ -18,7 +18,7 @@ class AgentState(TypedDict):
 
 # 定义一个 ChatTongyi 实例
 llm = ChatTongyi(
-    model="qwen-plus", 
+    model="qwen3.6-plus",
     dashscope_api_key=os.getenv("DASHSCOPE_API_KEY"), 
     temperature=0.7,
     streaming=True # 开启流式
