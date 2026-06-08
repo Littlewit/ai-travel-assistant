@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage
 import os, json, uuid, sqlite3
@@ -35,35 +36,22 @@ def get_history(session_id, limit=6):
 
 # --- FastAPI 应用 ---
 app = FastAPI(title="AI Travel Assistant Pro")
+
+# 【核心修改】：配置 CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 static_dir = os.path.join(os.getcwd(), "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # 全局检索器，初始为 None
 retriever = None
-retriever_loading = False
-
-def get_retriever():
-    global retriever, retriever_loading
-    if retriever:
-        return retriever
-    if retriever_loading:
-        return None
-    
-    retriever_loading = True
-    try:
-        print("⏳ 正在后台加载向量知识库...")
-        vs = load_vector_store()
-        if vs:
-            retriever = vs.as_retriever(search_kwargs={"k": 3})
-            print("✅ 向量知识库加载成功")
-        else:
-            print("⚠️ 向量库加载返回 None")
-    except Exception as e:
-        print(f"❌ 向量库加载失败: {e}")
-    finally:
-        retriever_loading = False
-    return retriever
 
 class ChatRequest(BaseModel):
     message: str
@@ -159,7 +147,15 @@ async def chat_stream(request: ChatRequest):
         save_message(session_id, "ai", full_response)
         yield f"data: {json.dumps({'session_id': session_id})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(), 
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no" # 关键：告诉 Nginx/代理不要缓冲
+        }
+    )
 
 if __name__ == "__main__":
     import uvicorn
