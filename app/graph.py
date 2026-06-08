@@ -19,12 +19,12 @@ class AgentState(TypedDict):
 # 【核心修改】：使用 ChatOpenAI 兼容阿里云百炼接口
 api_key_value = os.getenv("DASHSCOPE_API_KEY")
 llm = ChatOpenAI(
-    model="qwen3.6-plus",
+    model="qwen-plus", # 【提速】：使用 qwen-plus 获得更快的响应速度
     api_key=SecretStr(api_key_value) if api_key_value else None,
     base_url=os.getenv("DASHSCOPE_BASE_URL"),
     temperature=0.7,
     streaming=True,
-    extra_body={"enable_thinking": False}  # 【提速】：关闭深度思考，显著降低 TTFT
+    extra_body={"enable_thinking": False}  # 保持关闭深度思考
 )
 
 def router_node(state: AgentState):
