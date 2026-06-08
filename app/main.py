@@ -109,13 +109,27 @@ async def chat_stream(request: ChatRequest):
     is_travel_query = any(k in request.message.lower() for k in keywords)
     
     context = ""
-    # 【临时调试】：暂时强制关闭 RAG 检索，看是否能快速返回
-    # if is_travel_query and retriever:
-    #     try:
-    #         docs = retriever.invoke(request.message)
-    #         context = "\n\n".join([doc.page_content for doc in docs])
-    #     except Exception as e:
-    #         print(f"检索出错: {e}")
+    if is_travel_query and retriever:
+        try:
+            # 【核心优化】：使用 concurrent.futures 实现跨平台超时控制
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+            
+            def do_retrieval():
+                if retriever:
+                    return retriever.invoke(request.message)
+                return []
+
+            with ThreadPoolExecutor() as executor:
+                future = executor.submit(do_retrieval)
+                docs = future.result(timeout=5)  # 5秒超时
+                
+            context = "\n\n".join([doc.page_content for doc in docs])
+            print(f"✅ 检索成功，找到 {len(docs)} 条相关知识")
+                
+        except FuturesTimeoutError:
+            print("⚠️ RAG 检索超时，切换为纯 LLM 模式")
+        except Exception as e:
+            print(f"⚠️ 检索出错: {e}")
 
     if context:
         prompt_template = """你是一个资深的智能旅游规划师。请根据以下【背景知识】和用户的【问题】，提供一份详细的旅行建议。
