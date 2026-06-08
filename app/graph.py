@@ -2,7 +2,7 @@ from typing import Annotated, Sequence, TypedDict, Literal
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage, AIMessage
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
-from langchain_community.chat_models import ChatTongyi
+from langchain_openai import ChatOpenAI  # 引入 ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from app.rag_engine import retriever
 import os
@@ -10,30 +10,29 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# 定义 Agent 的状态
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     history: str
     context: str
 
-# 定义一个 ChatTongyi 实例
-llm = ChatTongyi(
+# 【核心修改】：使用 ChatOpenAI 兼容阿里云百炼接口
+llm = ChatOpenAI(
     model="qwen3.6-plus",
-    dashscope_api_key=os.getenv("DASHSCOPE_API_KEY"), 
+    api_key=os.getenv("DASHSCOPE_API_KEY"),
+    base_url=os.getenv("DASHSCOPE_BASE_URL"),
     temperature=0.7,
-    streaming=True # 开启流式
+    streaming=True,
+    extra_body={"enable_thinking": True}  # 开启深度思考
 )
 
-# 定义路由节点
 def router_node(state: AgentState):
     """根据关键词简单判断意图"""
     last_msg = state["messages"][-1].content.lower()
-    keywords = ["旅游", "景点", "美食", "攻略", "酒店", "交通", "玩", "吃", "住", "行", "推荐"]
+    keywords = ["旅游", "景点", "美食", "攻略", "酒店", "交通", "玩", "吃", "住", "行", "推荐", "路线"]
     if any(k in last_msg for k in keywords):
         return "rag_node"
     return "chat_node"
 
-# 定义 RAG 节点
 def rag_node(state: AgentState):
     """RAG 检索增强节点"""
     if retriever:
@@ -42,30 +41,30 @@ def rag_node(state: AgentState):
     else:
         context = "暂无相关背景知识。"
     
-    prompt_template = """你是一个专业的智能旅游助手。请结合以下信息回答：
-    
+    prompt_template = """你是一个资深的智能旅游规划师。请根据以下【背景知识】和用户的【问题】，提供一份详细的旅行建议。
+
     【背景知识】：
     {context}
-    
+
+    【聊天历史】：
+    {history}
+
     【用户问题】：
     {question}
-    
-    请给出详细、贴心且有条理的建议："""
+
+    **请务必在回复中包含以下内容：**
+    1. **最佳路线规划**：结合地理位置，给出一条不走回头路的顺畅游览顺序。
+    2. **交通方式对比**：针对主要行程节点，列出打车、公交/地铁、骑行三种方式的优缺点。
+    3. **避坑与建议**：基于背景知识，提醒用户需要注意的预约事项或天气情况。
+
+    请使用清晰的 Markdown 格式展示。"""
     
     prompt = ChatPromptTemplate.from_template(prompt_template)
     chain = prompt | llm
     
-    # 注意：在 graph 节点中直接 stream 比较难处理，通常我们在这里 invoke 拿到完整结果
-    # 为了实现流式，我们在 main.py 中直接处理链式调用会更灵活。
-    # 这里我们先返回一个标记，或者我们换一种思路：
-    # 既然要流式，我们不在 graph 内部 invoke，而是让 graph 只负责路由，
-    # 具体的 LLM 调用放在 main.py 的 stream 循环里？
-    # 不，最标准的做法是：Graph 负责逻辑，Stream 负责输出。
-    
-    response = chain.invoke({"context": context, "question": state["messages"][-1].content})
+    response = chain.invoke({"context": context, "history": state.get("history", ""), "question": state["messages"][-1].content})
     return {"messages": [response]}
 
-# 定义闲聊节点
 def chat_node(state: AgentState):
     """纯闲聊节点"""
     response = llm.invoke(state["messages"])

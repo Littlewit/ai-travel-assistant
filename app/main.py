@@ -71,7 +71,9 @@ async def chat_stream(request: ChatRequest):
     history = get_history(session_id)
     history_str = "\n".join([f"{h['role']}: {h['content']}" for h in history[-6:]])
     
-    from app.graph import retriever, llm, ChatPromptTemplate
+    # 【核心修改】：从 graph.py 导入已经配置好 base_url 的 llm
+    from app.graph import retriever, llm 
+    from langchain_core.prompts import ChatPromptTemplate
     
     # 1. 简单的意图识别
     keywords = ["旅游", "景点", "美食", "攻略", "酒店", "交通", "玩", "吃", "住", "行", "推荐", "路线"]
@@ -81,7 +83,6 @@ async def chat_stream(request: ChatRequest):
         docs = retriever.invoke(request.message)
         context = "\n\n".join([doc.page_content for doc in docs])
         
-        # 【核心优化】：增强版 Prompt，要求提供路线和交通对比
         prompt_template = """你是一个资深的智能旅游规划师。请根据以下【背景知识】和用户的【问题】，提供一份详细的旅行建议。
 
         【背景知识】：
@@ -105,7 +106,7 @@ async def chat_stream(request: ChatRequest):
         inputs = {"history": history_str, "context": context, "question": request.message}
     else:
         # 闲聊模式
-        prompt_template = """你叫小智，你是一个友好的助手。
+        prompt_template = """你是一个友好的助手。
         【聊天历史】：{history}
         【用户问题】：{question}"""
         prompt = ChatPromptTemplate.from_template(prompt_template)
