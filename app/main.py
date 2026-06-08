@@ -157,8 +157,9 @@ async def chat_stream(request: ChatRequest):
                 return []
 
             with ThreadPoolExecutor() as executor:
+                # 【核心优化】：将超时缩短到 3 秒，避免长时间等待网络或模型卡顿
                 future = executor.submit(do_retrieval)
-                docs = future.result(timeout=5)  # 5秒超时
+                docs = future.result(timeout=3)  # 3秒超时
                 
             context = "\n\n".join([doc.page_content for doc in docs])
             print(f"✅ 检索成功，找到 {len(docs)} 条相关知识")
@@ -168,7 +169,7 @@ async def chat_stream(request: ChatRequest):
         except Exception as e:
             import traceback
             print(f"⚠️ 检索出错: {type(e).__name__}: {str(e)}")
-            print(traceback.format_exc()) # 打印完整堆栈
+            print(traceback.format_exc())
 
     if context:
         prompt_template = """你是一个资深的智能旅游规划师。请根据以下【背景知识】和用户的【问题】，提供一份详细的旅行建议。
@@ -194,14 +195,21 @@ async def chat_stream(request: ChatRequest):
     def event_generator():
         full_response = ""
         try:
+            # 【核心优化】：设置一个总超时，防止 LLM 生成卡死导致 502
+            import time
+            start_time = time.time()
+            
             for chunk in chain.stream(inputs):
+                # 检查是否超过 60 秒（Render 网关超时通常是 60-90 秒）
+                if time.time() - start_time > 55:
+                    yield f"data: {json.dumps({'content': '\n⚠️ 响应时间过长，已自动中断。'})}\n\n"
+                    break
+                    
                 if hasattr(chunk, 'content') and chunk.content:
                     content_str = chunk.content if isinstance(chunk.content, str) else str(chunk.content)
                     full_response += content_str
-                    # 【核心优化】：确保每个数据包都立即发送，防止缓冲导致连接超时
                     yield f"data: {json.dumps({'content': content_str})}\n\n"
         except Exception as e:
-            # 如果流式生成中途出错，发送错误信息给前端
             yield f"data: {json.dumps({'content': f'\n⚠️ 生成中断: {str(e)}'})}\n\n"
         
         save_message(session_id, "ai", full_response)
