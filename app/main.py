@@ -129,7 +129,9 @@ async def chat_stream(request: ChatRequest):
         except FuturesTimeoutError:
             print("⚠️ RAG 检索超时，切换为纯 LLM 模式")
         except Exception as e:
-            print(f"⚠️ 检索出错: {e}")
+            import traceback
+            print(f"⚠️ 检索出错: {type(e).__name__}: {str(e)}")
+            print(traceback.format_exc()) # 打印完整堆栈
 
     if context:
         prompt_template = """你是一个资深的智能旅游规划师。请根据以下【背景知识】和用户的【问题】，提供一份详细的旅行建议。
