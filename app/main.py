@@ -154,11 +154,16 @@ async def chat_stream(request: ChatRequest):
 
     def event_generator():
         full_response = ""
-        for chunk in chain.stream(inputs):
-            if hasattr(chunk, 'content') and chunk.content:
-                content_str = chunk.content if isinstance(chunk.content, str) else str(chunk.content)
-                full_response += content_str
-                yield f"data: {json.dumps({'content': content_str})}\n\n"
+        try:
+            for chunk in chain.stream(inputs):
+                if hasattr(chunk, 'content') and chunk.content:
+                    content_str = chunk.content if isinstance(chunk.content, str) else str(chunk.content)
+                    full_response += content_str
+                    # 【核心优化】：确保每个数据包都立即发送，防止缓冲导致连接超时
+                    yield f"data: {json.dumps({'content': content_str})}\n\n"
+        except Exception as e:
+            # 如果流式生成中途出错，发送错误信息给前端
+            yield f"data: {json.dumps({'content': f'\n⚠️ 生成中断: {str(e)}'})}\n\n"
         
         save_message(session_id, "ai", full_response)
         yield f"data: {json.dumps({'session_id': session_id})}\n\n"
