@@ -1,9 +1,32 @@
 import os
+import requests
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
+from langchain_core.embeddings import Embeddings
 
 VECTOR_STORE_PATH = os.path.join(os.getcwd(), "vector_store")
-DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
+
+class SimpleDashScopeEmbeddings(Embeddings):
+    def __init__(self, api_key, model="text-embedding-v2"):
+        self.api_key = api_key
+        self.model = model
+
+    def embed_documents(self, texts):
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        # 【核心修复】：严格按照阿里云兼容模式要求发送 input 为 list of strings
+        payload = {
+            "model": self.model,
+            "input": {"texts": texts} 
+        }
+        response = requests.post(DEFAULT_BASE_URL, json=payload, headers=headers)
+        response.raise_for_status()
+        return [item["embedding"] for item in response.json()["data"]]
+
+    def embed_query(self, text):
+        return self.embed_documents([text])[0]
 
 def load_vector_store():
     if not os.path.exists(VECTOR_STORE_PATH):
@@ -15,12 +38,7 @@ def load_vector_store():
         print("⚠️ 警告: 未配置 DASHSCOPE_API_KEY，RAG 功能将不可用。")
         return None
 
-    # 【核心修改】：换回阿里云 text-embedding-v2，节省内存
-    embeddings = OpenAIEmbeddings(
-        model="text-embedding-v2", 
-        api_key=api_key,  # type: ignore
-        base_url=DEFAULT_BASE_URL
-    )
+    embeddings = SimpleDashScopeEmbeddings(api_key=api_key, model="text-embedding-v2")
     
     try:
         return FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
