@@ -36,24 +36,39 @@ def get_history(session_id, limit=6):
 
 # --- FastAPI 应用 ---
 app = FastAPI(title="AI Travel Assistant Pro")
-
-# 确保 static 目录存在并挂载
 static_dir = os.path.join(os.getcwd(), "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# 补充：处理浏览器直接请求 /favicon.ico 的情况
-@app.get("/favicon.ico")
-async def favicon():
-    from fastapi.responses import FileResponse
-    favicon_path = os.path.join(static_dir, "favicon.ico")
-    if os.path.exists(favicon_path):
-        return FileResponse(favicon_path)
-    return HTMLResponse("")  # 如果不存在则返回空
+# 全局检索器，初始为 None
+retriever = None
+retriever_loading = False
+
+def get_retriever():
+    global retriever, retriever_loading
+    if retriever:
+        return retriever
+    if retriever_loading:
+        return None
+    
+    retriever_loading = True
+    try:
+        print("⏳ 正在后台加载向量知识库...")
+        vs = load_vector_store()
+        if vs:
+            retriever = vs.as_retriever(search_kwargs={"k": 3})
+            print("✅ 向量知识库加载成功")
+        else:
+            print("⚠️ 向量库加载返回 None")
+    except Exception as e:
+        print(f"❌ 向量库加载失败: {e}")
+    finally:
+        retriever_loading = False
+    return retriever
 
 class ChatRequest(BaseModel):
     message: str
-    session_id: str | None = None
+    session_id: str = None
 
 @app.get("/")
 async def read_root():
@@ -63,70 +78,53 @@ async def read_root():
             return HTMLResponse(content=f.read())
     return HTMLResponse(content="<h1>Static files not found</h1>", status_code=404)
 
-from app.rag_engine import load_vector_store # 只导入函数，不直接执行初始化
-
-# 全局变量
-retriever = None
-
-@app.on_event("startup")
-async def startup_event():
-    global retriever
-    print("后台正在加载 AI 知识库...")
-    try:
-        vs = load_vector_store()
-        if vs:
-            retriever = vs.as_retriever(search_kwargs={"k": 3})
-            print("✅ 知识库加载完毕，服务 fully ready!")
-    except Exception as e:
-        print(f"❌ 知识库加载失败: {e}")
+@app.get("/favicon.ico")
+async def favicon():
+    from fastapi.responses import FileResponse
+    favicon_path = os.path.join(static_dir, "favicon.ico")
+    if os.path.exists(favicon_path):
+        return FileResponse(favicon_path)
+    return HTMLResponse("")
 
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
-    global retriever
-    if not retriever:
-        return StreamingResponse(iter([b"data: System is initializing knowledge base, please try again later...\n\n"]), media_type="text/event-stream")
-    
     session_id = request.session_id or str(uuid.uuid4())
     save_message(session_id, "human", request.message)
     
     history = get_history(session_id)
     history_str = "\n".join([f"{h['role']}: {h['content']}" for h in history[-6:]])
     
-    # 【核心修改】：从 graph.py 导入已经配置好 base_url 的 llm
-    from app.graph import retriever, llm 
-    from langchain_core.prompts import ChatPromptTemplate
+    from app.graph import llm, ChatPromptTemplate
     
-    # 1. 简单的意图识别
+    # 尝试获取检索器，如果还没加载完则返回 None
+    current_retriever = get_retriever()
+    
     keywords = ["旅游", "景点", "美食", "攻略", "酒店", "交通", "玩", "吃", "住", "行", "推荐", "路线"]
     is_travel_query = any(k in request.message.lower() for k in keywords)
     
-    if is_travel_query and retriever:
-        docs = retriever.invoke(request.message)
-        context = "\n\n".join([doc.page_content for doc in docs])
-        
+    if is_travel_query and current_retriever:
+        try:
+            docs = current_retriever.invoke(request.message)
+            context = "\n\n".join([doc.page_content for doc in docs])
+        except:
+            context = ""
+    else:
+        context = ""
+
+    if context:
         prompt_template = """你是一个资深的智能旅游规划师。请根据以下【背景知识】和用户的【问题】，提供一份详细的旅行建议。
-
-        【背景知识】：
-        {context}
-
-        【聊天历史】：
-        {history}
-
-        【用户问题】：
-        {question}
-
+        【背景知识】：{context}
+        【聊天历史】：{history}
+        【用户问题】：{question}
         **请务必在回复中包含以下内容：**
         1. **最佳路线规划**：结合地理位置，给出一条不走回头路的顺畅游览顺序。
-        2. **交通方式对比**：针对主要行程节点，列出打车、公交/地铁、骑行三种方式的优缺点（如：耗时、费用、舒适度、便利性）。
+        2. **交通方式对比**：针对主要行程节点，列出打车、公交/地铁、骑行三种方式的优缺点。
         3. **避坑与建议**：基于背景知识，提醒用户需要注意的预约事项或天气情况。
-
-        请使用清晰的 Markdown 格式（如表格或列表）展示交通对比，方便用户挑选。"""
-        
+        请使用清晰的 Markdown 格式展示。"""
         prompt = ChatPromptTemplate.from_template(prompt_template)
         chain = prompt | llm
         inputs = {"history": history_str, "context": context, "question": request.message}
     else:
-        # 闲聊模式
         prompt_template = """你是一个友好的助手。
         【聊天历史】：{history}
         【用户问题】：{question}"""
@@ -138,9 +136,8 @@ async def chat_stream(request: ChatRequest):
         full_response = ""
         for chunk in chain.stream(inputs):
             if chunk.content:
-                content_str = chunk.content if isinstance(chunk.content, str) else str(chunk.content)
-                full_response += content_str
-                yield f"data: {json.dumps({'content': content_str})}\n\n"
+                full_response += chunk.content
+                yield f"data: {json.dumps({'content': chunk.content})}\n\n"
         
         save_message(session_id, "ai", full_response)
         yield f"data: {json.dumps({'session_id': session_id})}\n\n"
@@ -149,6 +146,7 @@ async def chat_stream(request: ChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    # 【核心修改】：必须使用 Render 提供的 PORT 环境变量，默认 8000
     port = int(os.getenv("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
+from app.rag_engine import load_vector_store # 仅导入函数
