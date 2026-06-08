@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader, DirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import DashScopeEmbeddings  # 确保在顶部导入
+from langchain_openai import OpenAIEmbeddings  # 切换为 OpenAI 兼容接口
 
 load_dotenv()
 
@@ -17,7 +17,6 @@ def create_vector_store():
         print(f"已创建数据目录: {DATA_DIR}")
 
     documents = []
-    # 加载 TXT 和 MD 文件
     for ext in ["*.txt", "*.md"]:
         try:
             loader = DirectoryLoader(DATA_DIR, glob=ext, loader_cls=TextLoader, loader_kwargs={'encoding': 'utf-8'})
@@ -29,16 +28,21 @@ def create_vector_store():
         print("警告: data 目录下未找到任何 .txt 或 .md 文件")
         return None
 
-    # 文本切片
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = text_splitter.split_documents(documents)
 
-    # 向量化
     api_key = os.getenv("DASHSCOPE_API_KEY")
+    base_url = os.getenv("DASHSCOPE_BASE_URL")
     if not api_key:
         raise ValueError("❌ 错误: 未检测到 DASHSCOPE_API_KEY 环境变量")
     
-    embeddings = DashScopeEmbeddings(model="text-embedding-v2", dashscope_api_key=api_key)
+    # 【核心修改】：使用 OpenAIEmbeddings 兼容阿里云百炼
+    embeddings = OpenAIEmbeddings(
+        model="text-embedding-v2", # 或者尝试 text-embedding-v3
+        api_key=api_key,
+        base_url=base_url
+    )
+    
     vector_store = FAISS.from_documents(chunks, embeddings)
     
     if not os.path.exists(VECTOR_STORE_PATH):
@@ -55,10 +59,14 @@ def load_vector_store():
     if not api_key:
         raise ValueError("❌ 错误: 未检测到 DASHSCOPE_API_KEY 环境变量")
 
-    embeddings = DashScopeEmbeddings(model="text-embedding-v2", dashscope_api_key=api_key)
+    embeddings = OpenAIEmbeddings(
+        model="text-embedding-v2",
+        api_key=api_key,
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+    )
     return FAISS.load_local(VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True)
 
-# 初始化工具
+# 初始化
 retriever = None
 try:
     vs = load_vector_store()
