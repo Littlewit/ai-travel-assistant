@@ -87,7 +87,10 @@ async def favicon():
 
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
-    # 【动态导入】：只有在收到请求时才加载 AI 模块，避免启动超时
+    session_id = request.session_id or str(uuid.uuid4())
+    save_message(session_id, "human", request.message)
+    
+    # 【核心修改】：更稳健的动态导入逻辑
     try:
         from app.graph import llm, ChatPromptTemplate
         from app.rag_engine import load_vector_store
@@ -95,29 +98,35 @@ async def chat_stream(request: ChatRequest):
         # 懒加载检索器
         global retriever
         if 'retriever' not in globals() or retriever is None:
+            print("⏳ 正在尝试加载向量库...")
             vs = load_vector_store()
             if vs:
                 retriever = vs.as_retriever(search_kwargs={"k": 3})
+                print("✅ 向量库加载成功")
+            else:
+                print("⚠️ 向量库加载返回 None")
     except Exception as e:
-        return StreamingResponse(iter([f"data: 系统初始化失败: {str(e)}\n\n"]), media_type="text/event-stream")
+        import traceback
+        error_msg = f"系统初始化失败: {str(e)}"
+        print(traceback.format_exc()) # 在后台打印详细堆栈以便调试
+        # 返回符合 SSE 格式的 JSON 错误信息
+        def error_generator():
+            yield f"data: {json.dumps({'content': f'⚠️ AI 助手启动中，请稍后再试。错误详情: {str(e)}'})}\n\n"
+        return StreamingResponse(error_generator(), media_type="text/event-stream")
 
-    session_id = request.session_id or str(uuid.uuid4())
-    save_message(session_id, "human", request.message)
-    
     history = get_history(session_id)
     history_str = "\n".join([f"{h['role']}: {h['content']}" for h in history[-6:]])
     
     keywords = ["旅游", "景点", "美食", "攻略", "酒店", "交通", "玩", "吃", "住", "行", "推荐", "路线"]
     is_travel_query = any(k in request.message.lower() for k in keywords)
     
+    context = ""
     if is_travel_query and retriever:
         try:
             docs = retriever.invoke(request.message)
             context = "\n\n".join([doc.page_content for doc in docs])
-        except:
-            context = ""
-    else:
-        context = ""
+        except Exception as e:
+            print(f"检索出错: {e}")
 
     if context:
         prompt_template = """你是一个资深的智能旅游规划师。请根据以下【背景知识】和用户的【问题】，提供一份详细的旅行建议。
