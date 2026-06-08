@@ -46,14 +46,5 @@ def load_vector_store():
         print(f"⚠️ 加载向量库失败: {e}")
         return None
 
-print("🚀 正在初始化 RAG 引擎...")
+# 【核心优化】：不再在模块加载时初始化 retriever，避免阻塞服务启动
 retriever = None
-try:
-    print("📂 正在加载向量库...")
-    vs = load_vector_store()
-    if vs:
-        print("🔍 正在创建检索器...")
-        retriever = vs.as_retriever(search_kwargs={"k": 3})
-        print("✅ RAG 引擎初始化完成！")
-except Exception as e:
-    print(f"⚠️ 初始化检索器失败: {e}")
