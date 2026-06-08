@@ -53,7 +53,7 @@ async def favicon():
 
 class ChatRequest(BaseModel):
     message: str
-    session_id: str = None
+    session_id: str | None = None
 
 @app.get("/")
 async def read_root():
@@ -63,8 +63,29 @@ async def read_root():
             return HTMLResponse(content=f.read())
     return HTMLResponse(content="<h1>Static files not found</h1>", status_code=404)
 
+from app.rag_engine import load_vector_store # 只导入函数，不直接执行初始化
+
+# 全局变量
+retriever = None
+
+@app.on_event("startup")
+async def startup_event():
+    global retriever
+    print("后台正在加载 AI 知识库...")
+    try:
+        vs = load_vector_store()
+        if vs:
+            retriever = vs.as_retriever(search_kwargs={"k": 3})
+            print("✅ 知识库加载完毕，服务 fully ready!")
+    except Exception as e:
+        print(f"❌ 知识库加载失败: {e}")
+
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
+    global retriever
+    if not retriever:
+        return StreamingResponse(iter([b"data: System is initializing knowledge base, please try again later...\n\n"]), media_type="text/event-stream")
+    
     session_id = request.session_id or str(uuid.uuid4())
     save_message(session_id, "human", request.message)
     
@@ -117,8 +138,9 @@ async def chat_stream(request: ChatRequest):
         full_response = ""
         for chunk in chain.stream(inputs):
             if chunk.content:
-                full_response += chunk.content
-                yield f"data: {json.dumps({'content': chunk.content})}\n\n"
+                content_str = chunk.content if isinstance(chunk.content, str) else str(chunk.content)
+                full_response += content_str
+                yield f"data: {json.dumps({'content': content_str})}\n\n"
         
         save_message(session_id, "ai", full_response)
         yield f"data: {json.dumps({'session_id': session_id})}\n\n"
@@ -127,4 +149,6 @@ async def chat_stream(request: ChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # 【核心修改】：必须使用 Render 提供的 PORT 环境变量，默认 8000
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

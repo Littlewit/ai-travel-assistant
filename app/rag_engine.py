@@ -58,13 +58,15 @@ def load_vector_store():
         print(f"⚠️ 加载向量库失败: {e}")
         return None
 
-# 初始化检索器
+print("🚀 正在初始化 RAG 引擎...")
 retriever = None
 try:
+    print("📂 正在加载向量库...")
     vs = load_vector_store()
     if vs:
+        print("🔍 正在创建检索器...")
         retriever = vs.as_retriever(search_kwargs={"k": 3})
-        print("✅ 成功加载本地向量知识库 (Local Model)")
+        print("✅ RAG 引擎初始化完成！")
 except Exception as e:
     print(f"⚠️ 初始化检索器失败: {e}")
 

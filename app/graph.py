@@ -7,6 +7,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from app.rag_engine import retriever
 import os
 from dotenv import load_dotenv
+from pydantic import SecretStr
 
 load_dotenv()
 
@@ -16,9 +17,10 @@ class AgentState(TypedDict):
     context: str
 
 # 【核心修改】：使用 ChatOpenAI 兼容阿里云百炼接口
+api_key_value = os.getenv("DASHSCOPE_API_KEY")
 llm = ChatOpenAI(
     model="qwen3.6-plus",
-    api_key=os.getenv("DASHSCOPE_API_KEY"),
+    api_key=SecretStr(api_key_value) if api_key_value else None,
     base_url=os.getenv("DASHSCOPE_BASE_URL"),
     temperature=0.7,
     streaming=True,
@@ -27,7 +29,11 @@ llm = ChatOpenAI(
 
 def router_node(state: AgentState):
     """根据关键词简单判断意图"""
-    last_msg = state["messages"][-1].content.lower()
+    last_msg_content = state["messages"][-1].content
+    if isinstance(last_msg_content, str):
+        last_msg = last_msg_content.lower()
+    else:
+        last_msg = str(last_msg_content).lower()
     keywords = ["旅游", "景点", "美食", "攻略", "酒店", "交通", "玩", "吃", "住", "行", "推荐", "路线"]
     if any(k in last_msg for k in keywords):
         return "rag_node"
@@ -35,8 +41,11 @@ def router_node(state: AgentState):
 
 def rag_node(state: AgentState):
     """RAG 检索增强节点"""
+    last_msg_content = state["messages"][-1].content
+    question_str = last_msg_content if isinstance(last_msg_content, str) else str(last_msg_content)
+    
     if retriever:
-        docs = retriever.invoke(state["messages"][-1].content)
+        docs = retriever.invoke(question_str)
         context = "\n\n".join([doc.page_content for doc in docs])
     else:
         context = "暂无相关背景知识。"
