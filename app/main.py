@@ -78,14 +78,15 @@ async def chat_stream(request: ChatRequest):
     session_id = request.session_id or str(uuid.uuid4())
     save_message(session_id, "human", request.message)
     
-    # 【核心修改】：更稳健的动态导入逻辑
+    # 【核心修改】：动态导入，避免启动时阻塞
     try:
-        from app.graph import llm, ChatPromptTemplate
+        from app.graph import llm
+        from langchain_core.prompts import ChatPromptTemplate
         from app.rag_engine import load_vector_store
         
         # 懒加载检索器
         global retriever
-        if 'retriever' not in globals() or retriever is None:
+        if retriever is None:
             print("⏳ 正在尝试加载向量库...")
             vs = load_vector_store()
             if vs:
@@ -96,8 +97,7 @@ async def chat_stream(request: ChatRequest):
     except Exception as e:
         import traceback
         error_msg = f"系统初始化失败: {str(e)}"
-        print(traceback.format_exc()) # 在后台打印详细堆栈以便调试
-        # 返回符合 SSE 格式的 JSON 错误信息
+        print(traceback.format_exc())
         def error_generator():
             yield f"data: {json.dumps({'content': f'⚠️ AI 助手启动中，请稍后再试。错误详情: {str(e)}'})}\n\n"
         return StreamingResponse(error_generator(), media_type="text/event-stream")
