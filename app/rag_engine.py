@@ -16,12 +16,14 @@ class SimpleDashScopeEmbeddings(Embeddings):
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        # 【核心修复】：严格按照阿里云兼容模式要求发送 input 为 list of strings
+        # 【核心修复】：兼容模式下，input 必须是直接的 list of strings
         payload = {
             "model": self.model,
-            "input": {"texts": texts} 
+            "input": texts 
         }
         response = requests.post(DEFAULT_BASE_URL, json=payload, headers=headers)
+        if response.status_code != 200:
+            print(f"❌ Embedding API 错误: {response.status_code} - {response.text}")
         response.raise_for_status()
         return [item["embedding"] for item in response.json()["data"]]
 
