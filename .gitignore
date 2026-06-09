@@ -19,6 +19,8 @@ chat_history.db
 # 向量库（本地构建后上传，避免 Render 内存溢出）
 # vector_store/
 
+vector_store-v2
+
 # IDE
 .vscode/
 .idea/

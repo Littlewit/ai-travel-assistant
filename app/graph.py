@@ -8,7 +8,7 @@ load_dotenv()
 # 【核心修改】：使用 ChatOpenAI 兼容阿里云百炼接口
 api_key_value = os.getenv("DASHSCOPE_API_KEY")
 llm = ChatOpenAI(
-    model="qwen-plus",
+    model="qwen3.6-flash",
     api_key=SecretStr(api_key_value) if api_key_value else None,
     base_url=os.getenv("DASHSCOPE_BASE_URL"),
     temperature=0.7,
