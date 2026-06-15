@@ -25,3 +25,5 @@ vector_store-v2
 .vscode/
 .idea/
 .DS_Store
+# 代码编辑器文件
+.codebuddy
