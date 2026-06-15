@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage
-import os, json, uuid, sqlite3
+import os, json, uuid, sqlite3, gc
 
 # --- 数据库初始化 ---
 DB_NAME = os.path.join(os.getcwd(), "chat_history.db")
@@ -228,8 +228,18 @@ async def chat_stream(request: ChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    # 强制使用 10000 端口（Render 默认期望的端口范围）
     port = int(os.getenv("PORT", 10000))
     print(f"🚀 Starting server on port {port}...")
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port,
+        log_level="info",
+        # === 内存优化参数 ===
+        workers=1,                # 单 worker，2 GiB 内存不应多 worker
+        limit_concurrency=10,     # 限制并发连接数，防止 OOM
+        limit_max_requests=200,   # 每处理 200 个请求后重启 worker，防止内存泄漏累积
+        backlog=32,               # 限制 TCP 连接队列长度
+        timeout_keep_alive=5,     # 缩短 Keep-Alive 超时，快速释放空闲连接资源
+    )
 

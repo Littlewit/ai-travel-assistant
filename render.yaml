@@ -4,8 +4,8 @@ services:
     name: ai-travel-assistant
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt && uv run python -m app.rag_engine
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r requirements.txt && uv run python rebuild_index.py
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --limit-concurrency 10 --limit-max-requests 200 --backlog 32 --timeout-keep-alive 5
     envVars:
       - key: DASHSCOPE_API_KEY
         sync: false
