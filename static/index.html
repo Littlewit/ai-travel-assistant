@@ -117,6 +117,61 @@
             border: 1px solid #ddd;
             white-space: nowrap;
         }
+        /* 欢迎消息与提示示例样式 */
+        .welcome-message {
+            max-width: 100% !important;
+            background: linear-gradient(135deg, #f0f4ff 0%, #fff5f5 100%);
+            border: 1px solid #e8e0f0;
+            border-radius: 18px;
+            padding: 18px 20px;
+        }
+        .welcome-message p {
+            margin: 0 0 10px 0;
+            font-size: 15px;
+            line-height: 1.7;
+            color: #444;
+        }
+        .welcome-message p:last-of-type {
+            margin-bottom: 12px;
+        }
+        .suggestion-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .chip {
+            display: inline-block;
+            padding: 8px 14px;
+            background: white;
+            border: 1px solid #d0c8e0;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #555;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            white-space: nowrap;
+        }
+        .chip:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        }
+        .chip:active {
+            transform: translateY(0);
+        }
+        /* 移动端点击反馈 */
+        @media (hover: none) {
+            .chip:active {
+                background: #667eea;
+                color: white;
+                border-color: #667eea;
+                transform: scale(0.96);
+            }
+        }
         .input-area { 
             padding: 20px; 
             border-top: 1px solid #eee; 
@@ -235,7 +290,24 @@
 <body>
     <div class="chat-container">
         <div class="chat-header">🌍 智能 AI 旅游助手</div>
-        <div class="chat-messages" id="messages"></div>
+        <div class="chat-messages" id="messages">
+            <div class="message ai-message welcome-message">
+                <p>👋 你好！我是你的<a href="#" onclick="event.preventDefault()" style="color:inherit;text-decoration:none;">智能 AI 旅游助手</a>。</p>
+                <p>我可以帮你规划行程、推荐景点美食、提供交通建议。试试点击下面的问题快速开始：</p>
+                <div class="suggestion-chips" id="suggestionChips">
+                    <span class="chip" onclick="useSuggestion('北京三日游怎么安排？')">北京三日游</span>
+                    <span class="chip" onclick="useSuggestion('成都大熊猫基地怎么去？几点去最好？')">🐼 成都熊猫基地</span>
+                    <span class="chip" onclick="useSuggestion('上海外滩夜景什么时间看最好？')">🌃 上海外滩夜景</span>
+                    <span class="chip" onclick="useSuggestion('去大理洱海骑行有什么路线推荐？')">🚴 大理洱海骑行</span>
+                    <span class="chip" onclick="useSuggestion('北京烤鸭哪家最正宗？')">🦆 北京烤鸭推荐</span>
+                    <span class="chip" onclick="useSuggestion('成都火锅哪家好吃？')">🌶️ 成都火锅指南</span>
+                    <span class="chip" onclick="useSuggestion('上海有哪些必吃的小吃？')">🥟 上海小吃推荐</span>
+                    <span class="chip" onclick="useSuggestion('第一次去北京旅游需要注意什么？')">📋 北京旅游攻略</span>
+                    <span class="chip" onclick="useSuggestion('我想去云南大理，给我推荐一个三天行程')">🗺️ 大理三日游</span>
+                    <span class="chip" onclick="useSuggestion('长沙三天两晚有什么推荐？')">🏙️ 长沙三天两晚</span>
+                </div>
+            </div>
+        </div>
         <div class="input-area">
             <input type="text" id="userInput" placeholder="输入您的旅游需求..." onkeypress="handleKeyPress(event)">
             <button onclick="sendMessage()">发送</button>
@@ -335,6 +407,12 @@
 
         function handleKeyPress(event) {
             if (event.key === 'Enter') sendMessage();
+        }
+
+        /** 点击提示示例，自动填入并发送 */
+        function useSuggestion(text) {
+            document.getElementById('userInput').value = text;
+            sendMessage();
         }
     </script>
 </body>
