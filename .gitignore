@@ -27,3 +27,4 @@ vector_store-v2
 .DS_Store
 # 代码编辑器文件
 .codebuddy
+.comate

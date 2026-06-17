@@ -2,12 +2,20 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>智能 AI 旅游助手</title>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico" />
     <!-- 引入 marked.js (使用 CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
+        /* 全局重置与移动端基础样式 */
+        *, *::before, *::after { box-sizing: border-box; }
+        :root {
+            --safe-area-top: env(safe-area-inset-top, 0px);
+            --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-area-left: env(safe-area-inset-left, 0px);
+            --safe-area-right: env(safe-area-inset-right, 0px);
+        }
         body { 
             font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
             background-color: #f0f2f5; 
@@ -17,6 +25,8 @@
             height: 100vh; 
             margin: 0; 
             overflow: hidden; /* 防止背景滚动 */
+            -webkit-tap-highlight-color: transparent; /* 消除移动端点击高亮 */
+            overscroll-behavior: contain; /* 防止页面下拉刷新 */
         }
         .chat-container { 
             width: 90%; /* 宽度占屏幕 90% */
@@ -74,6 +84,39 @@
         .ai-message p { margin: 0 0 10px 0; }
         .ai-message p:last-child { margin-bottom: 0; }
         .ai-message ul, .ai-message ol { margin: 0 0 10px 0; padding-left: 20px; }
+        /* Markdown 内容溢出防护（移动端关键） */
+        .ai-message pre {
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-width: 100%;
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 14px;
+        }
+        .ai-message code {
+            word-break: break-all;
+            font-size: 0.9em;
+        }
+        .ai-message img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+        .ai-message table {
+            display: block;
+            overflow-x: auto;
+            max-width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .ai-message table th,
+        .ai-message table td {
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            white-space: nowrap;
+        }
         .input-area { 
             padding: 20px; 
             border-top: 1px solid #eee; 
@@ -105,6 +148,88 @@
         }
         button:hover { background: #5a6fd6; transform: translateY(-1px); }
         button:active { transform: translateY(0); }
+
+        /* ========== 响应式设计 - 平板 & 大屏手机 (≤768px) ========== */
+        @media (max-width: 768px) {
+            .chat-header {
+                padding: 15px;
+                font-size: 18px;
+            }
+            .chat-messages {
+                padding: 15px;
+                gap: 12px;
+            }
+            .message {
+                max-width: 90%;
+                padding: 10px 14px;
+                font-size: 15px;
+            }
+            .input-area {
+                padding: 15px;
+            }
+        }
+
+        /* ========== 响应式设计 - 小屏手机 (≤480px) ========== */
+        @media (max-width: 480px) {
+            .chat-container {
+                width: 100%;
+                max-width: 100%;
+                height: 100dvh; /* 动态视口高度，解决移动端地址栏伸缩问题 */
+                border-radius: 0;
+                box-shadow: none;
+            }
+            .chat-header {
+                padding: 12px 12px;
+                padding-top: calc(12px + var(--safe-area-top));
+                font-size: 16px;
+            }
+            .chat-messages {
+                padding: 10px;
+                gap: 10px;
+                -webkit-overflow-scrolling: touch; /* iOS 顺滑滚动 */
+            }
+            .message {
+                max-width: 92%;
+                padding: 8px 12px;
+                font-size: 14px;
+            }
+            .input-area {
+                padding: 10px;
+                padding-bottom: calc(10px + var(--safe-area-bottom));
+                gap: 8px;
+            }
+            input {
+                padding: 12px 16px;
+                font-size: 16px; /* 保持 16px 防止 iOS 自动缩放 */
+            }
+            button {
+                padding: 12px 20px;
+                font-size: 15px;
+                min-height: 44px; /* 触控最小高度 */
+                min-width: 70px;
+            }
+        }
+
+        /* ========== 响应式设计 - 横屏手机 ========== */
+        @media (orientation: landscape) and (max-height: 500px) {
+            .chat-header {
+                padding: 8px;
+                font-size: 15px;
+            }
+            .chat-messages {
+                padding: 8px;
+                gap: 8px;
+            }
+            .input-area {
+                padding: 8px;
+                gap: 6px;
+            }
+            button {
+                padding: 10px 16px;
+                font-size: 14px;
+                min-height: 36px;
+            }
+        }
     </style>
 </head>
 <body>
